@@ -1,5 +1,16 @@
 <script lang="ts">
   import Card from "../lib/Card.svelte";
+  import {onMount} from "svelte";
+
+  async function getCard(): Promise<Card> {
+    const res = await fetch(`/api/`);
+    const json = await res.json();
+    if (res.ok) {
+      return json;
+    } else {
+      throw new Error(":(");
+    }
+  }
 
   type Card = {
     animal: string;
@@ -11,10 +22,17 @@
     dy: number;
   };
 
-  const response: Card = {animal: "Cobra", moves: [{dx: 1, dy: -1}, {dx: -1, dy: 0}, {dx: 1, dy: 1}]};
-  const json = JSON.stringify(response);
+  const card = getCard();
 
-  const card: Card = JSON.parse(json);
+  // onMount(async () => {
+  //
+  // });
 </script>
 
-<Card {...card}/>
+{#await card}
+    <p>...</p>
+{:then card}
+    <Card {...card}/>
+{:catch error}
+    <p style="color: red">{error.message}</p>
+{/await}

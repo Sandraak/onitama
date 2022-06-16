@@ -16,7 +16,7 @@ async fn main() {
 
     let addr = HOST.parse().expect("invalid host");
     let app = Router::new()
-        .route("/", get(index));
+        .route("/api", get(index));
 
     debug!("listening on http://{}", addr);
     Server::bind(&addr)
