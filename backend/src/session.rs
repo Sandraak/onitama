@@ -1,9 +1,9 @@
 use async_session::{MemoryStore, Session, SessionStore as _};
-use axum::{Extension, TypedHeader};
 use axum::async_trait;
 use axum::extract::{FromRequest, RequestParts};
 use axum::headers::{Cookie, HeaderValue};
 use axum::http::StatusCode;
+use axum::{Extension, TypedHeader};
 use serde::{Deserialize, Serialize};
 use tracing::debug;
 use uuid::Uuid;
@@ -22,8 +22,8 @@ pub enum UserIdFromSession {
 
 #[async_trait]
 impl<B> FromRequest<B> for UserIdFromSession
-    where
-        B: Send,
+where
+    B: Send,
 {
     type Rejection = (StatusCode, &'static str);
 
@@ -51,7 +51,7 @@ impl<B> FromRequest<B> for UserIdFromSession
                 cookie: HeaderValue::from_str(
                     format!("{}={}", AXUM_SESSION_COOKIE_NAME, cookie).as_str(),
                 )
-                    .unwrap(),
+                .unwrap(),
             }));
         }
 

@@ -2,18 +2,21 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use async_session::MemoryStore;
-use axum::{extract::Extension, http::{
-    self,
-    header::HeaderMap,
-}, Json, response::IntoResponse, Router, routing::get, Server};
 use axum::extract::{Path, WebSocketUpgrade};
+use axum::{
+    extract::Extension,
+    http::{self, header::HeaderMap},
+    response::IntoResponse,
+    routing::get,
+    Json, Router, Server,
+};
 use tracing::debug;
 use uuid::Uuid;
 
 use onitama::card::Card;
 use onitama::State as GameState;
 
-use crate::session::{AXUM_SESSION_COOKIE_NAME, UserId, UserIdFromSession};
+use crate::session::{UserId, UserIdFromSession, AXUM_SESSION_COOKIE_NAME};
 
 mod session;
 
@@ -37,12 +40,13 @@ async fn create(user_id: UserIdFromSession, Extension(db): Extension<Database>) 
     Json(key)
 }
 
-async fn connect(user_id: UserIdFromSession, Extension(db): Extension<Database>, Path(game_id): Path<Uuid>, ws: WebSocketUpgrade) -> impl IntoResponse {
-    ws.on_upgrade(|mut socket| async move {
-        while let Some(x) = socket.recv().await {
-
-        }
-    })
+async fn connect(
+    user_id: UserIdFromSession,
+    Extension(db): Extension<Database>,
+    Path(game_id): Path<Uuid>,
+    ws: WebSocketUpgrade,
+) -> impl IntoResponse {
+    ws.on_upgrade(|mut socket| async move { while let Some(x) = socket.recv().await {} })
 }
 
 async fn card() -> Json<Card> {
