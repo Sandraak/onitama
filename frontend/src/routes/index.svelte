@@ -1,38 +1,24 @@
 <script lang="ts">
-  import Card from "../lib/Card.svelte";
-  import {onMount} from "svelte";
+  async function createGame(): Promise<String> {
+    const token = await fetch('/api');
+    console.log(await token.text());
 
-  async function getCard(): Promise<Card> {
-    const res = await fetch(`/api/card`);
-    const json = await res.json();
-    if (res.ok) {
-      return json;
+    const game = await fetch('/api/create');
+    const link = `/play?game_id=${await game.json()}`;
+    if (game.ok) {
+      return link;
     } else {
       throw new Error(":(");
     }
   }
 
-  type Card = {
-    animal: string;
-    moves: Array<Move>;
-  };
-
-  type Move = {
-    dx: number;
-    dy: number;
-  };
-
-  const card = getCard();
-
-  // onMount(async () => {
-  //
-  // });
+  const link = createGame();
 </script>
 
-{#await card}
-    <p>...</p>
-{:then card}
-    <Card {...card}/>
+{#await link}
+    <span>...</span>
+{:then href}
+    <a {href}>Play</a>
 {:catch error}
     <p style="color: red">{error.message}</p>
 {/await}
