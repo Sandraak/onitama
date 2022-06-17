@@ -2,7 +2,9 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use async_session::MemoryStore;
+use axum::extract::ws::Message;
 use axum::extract::{Path, WebSocketUpgrade};
+use axum::http::StatusCode;
 use axum::{
     extract::Extension,
     http::{self, header::HeaderMap},
@@ -13,13 +15,12 @@ use axum::{
 use tracing::debug;
 use uuid::Uuid;
 
-use onitama::card::Card;
-use onitama::State as GameState;
+use onitama::card::{Card, Move};
+use onitama::{Colour, MovePiece, State as GameState};
 
 use crate::session::{UserId, UserIdFromSession, AXUM_SESSION_COOKIE_NAME};
 
 mod session;
-
 pub struct Game {
     p1: UserId,
     p2: Option<UserId>,
@@ -45,8 +46,70 @@ async fn connect(
     Extension(db): Extension<Database>,
     Path(game_id): Path<Uuid>,
     ws: WebSocketUpgrade,
-) -> impl IntoResponse {
-    ws.on_upgrade(|mut socket| async move { while let Some(x) = socket.recv().await {} })
+) -> Result<impl IntoResponse, HandleError> {
+    if db.lock().unwrap().get(&game_id).is_none() {
+        return Err(HandleError::NoGame);
+    }
+    Ok(ws.on_upgrade(move |mut socket| async move {
+        let user_id = user_id.into();
+        while db.lock().unwrap().get(&game_id).unwrap().p2.is_none() {
+            tokio::time::sleep(tokio::time::Duration::from_millis(500));
+            socket.send(Message::Text("Waiting for player 2...".to_string()));
+        }
+
+        while let Some(Ok(message)) = socket.recv().await {
+            // Wat als dit geen move is?
+            let mov: MovePiece = serde_json::from_str(&message.into_text().unwrap()).unwrap();
+            //   let game = db.lock().unwrap().get_mut(&game_id).unwrap();
+            let current_player = db
+                .lock()
+                .unwrap()
+                .get_mut(&game_id)
+                .unwrap()
+                .state
+                .current_player();
+            if (db.lock().unwrap().get_mut(&game_id).unwrap().p1 == user_id && current_player == Colour::Red)
+            || (db.lock().unwrap().get_mut(&game_id).unwrap().p2 == Some(user_id) && current_player == Colour::Blue) {
+                    if db
+                        .lock()
+                        .unwrap()
+                        .get_mut(&game_id)
+                        .unwrap()
+                        .state
+                        .perform_mov(mov)
+                        .is_err()
+                    {
+                        socket.send(Message::Text("Invalid move by player 1.".to_string()));
+                    } else {
+                        socket.send(Message::Text("Prima p1".to_string()));
+                    }
+            }
+            if db
+                .lock()
+                .unwrap()
+                .get_mut(&game_id)
+                .unwrap()
+                .state
+                .winner()
+                .is_some()
+            {
+                if db
+                    .lock()
+                    .unwrap()
+                    .get_mut(&game_id)
+                    .unwrap()
+                    .state
+                    .winner()
+                    .unwrap()
+                    == Colour::Red
+                {
+                    socket.send(Message::Text("Red won".to_string()));
+                } else {
+                    socket.send(Message::Text("Blue won".to_string()));
+                }
+            }
+        }
+    }))
 }
 
 async fn card() -> Json<Card> {
@@ -97,4 +160,19 @@ async fn main() {
         .serve(app.into_make_service())
         .await
         .unwrap();
+}
+
+enum HandleError {
+    NoGame,
+    InvalidMove,
+}
+
+impl IntoResponse for HandleError {
+    fn into_response(self) -> axum::response::Response {
+        let body = match self {
+            HandleError::NoGame => "No game id found.",
+            HandleError::InvalidMove => "Invalid move",
+        };
+        (StatusCode::INTERNAL_SERVER_ERROR, body).into_response()
+    }
 }

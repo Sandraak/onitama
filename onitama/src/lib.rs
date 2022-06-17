@@ -3,6 +3,7 @@ use std::collections::BTreeMap;
 use rand::prelude::SliceRandom;
 
 use card::{Card, Move};
+use serde::Deserialize;
 
 pub mod card;
 
@@ -28,7 +29,7 @@ impl State {
         }
     }
 
-    fn perform_mov(&mut self, mov: MovePiece) -> Result<(), MoveError> {
+    pub fn perform_mov(&mut self, mov: MovePiece) -> Result<(), MoveError> {
         if !self
             .cards
             .get(&self.current_player)
@@ -45,11 +46,26 @@ impl State {
             x: (mov.from.x as i8 + mov.mov.dx) as usize,
             y: (mov.from.y as i8 + mov.mov.dy) as usize,
         };
+        // TODO: check if new pos is on the board and not occupied by pawn of own colour
         self.board.board[to.x][to.y] = Some(piece);
+        std::mem::swap(
+            &mut self.cards.get_mut(&self.current_player).unwrap()[mov.card],
+            &mut self.spare_card,
+        );
+        // TODO: Maak minder lelijk
+        if self.current_player == Colour::Blue {
+            self.current_player = Colour::Red;
+        } else {
+            self.current_player = Colour::Blue;
+        }
         Ok(())
     }
 
-    fn winner(&self) -> Option<Colour> {
+    pub fn current_player(&self) -> Colour {
+        self.current_player
+    }
+
+    pub fn winner(&self) -> Option<Colour> {
         if !self
             .board
             .board
@@ -113,12 +129,13 @@ impl Piece {
     const BLUEMASTER: Piece = Piece(Rank::Master, Colour::Blue);
 }
 
-struct MovePiece {
+#[derive(Deserialize)]
+pub struct MovePiece {
     from: Position,
     mov: Move,
     card: usize, //index van de kaarten van de spelen
 }
-
+#[derive(Deserialize)]
 struct Position {
     x: usize,
     y: usize,
@@ -130,13 +147,13 @@ enum Rank {
     Master,
 }
 
-#[derive(Ord, PartialOrd, PartialEq, Eq)]
-enum Colour {
+#[derive(Ord, PartialOrd, PartialEq, Eq, Copy, Clone)]
+pub enum Colour {
     Red,
     Blue,
 }
 
-enum MoveError {
+pub enum MoveError {
     NoPiece,
     InvalidMove,
 }
