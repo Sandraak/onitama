@@ -41,6 +41,42 @@ async fn create(user_id: UserIdFromSession, Extension(db): Extension<Database>) 
     Json(key)
 }
 
+async fn submit(
+    user_id: UserIdFromSession,
+    Extension(db): Extension<Database>,
+    Path(game_id): Path<Uuid>,
+    Path(mov): Path<MovePiece>,
+) -> Result<String, HandleError> {
+    let user_id = user_id.into();
+    let mut guard = db.lock().unwrap();
+    let game = guard.get_mut(&game_id).ok_or(HandleError::NoGame)?;
+
+    let mut succes_string = "Prima.".to_string();
+
+    if game.p2.is_none() {
+        return Err(HandleError::NoSecondPlayer);
+    }
+    let current_player = game.state.current_player();
+    if (game.p1 == user_id && current_player == Colour::Red)
+        || (game.p2 == Some(user_id) && current_player == Colour::Blue)
+    {
+        if game.state.perform_mov(mov).is_err() {
+            return Err(HandleError::InvalidMove);
+        }
+    } else {
+        return Err(HandleError::OutOfTurn);
+    }
+
+    if game.state.winner().is_some() {
+        if game.state.winner().unwrap() == Colour::Red {
+            succes_string = "Red won".to_string();
+        } else {
+            succes_string = "Blue won".to_string();
+        }
+    }
+    Ok(succes_string)
+}
+
 async fn connect(
     user_id: UserIdFromSession,
     Extension(db): Extension<Database>,
@@ -68,21 +104,24 @@ async fn connect(
                 .unwrap()
                 .state
                 .current_player();
-            if (db.lock().unwrap().get_mut(&game_id).unwrap().p1 == user_id && current_player == Colour::Red)
-            || (db.lock().unwrap().get_mut(&game_id).unwrap().p2 == Some(user_id) && current_player == Colour::Blue) {
-                    if db
-                        .lock()
-                        .unwrap()
-                        .get_mut(&game_id)
-                        .unwrap()
-                        .state
-                        .perform_mov(mov)
-                        .is_err()
-                    {
-                        socket.send(Message::Text("Invalid move by player 1.".to_string()));
-                    } else {
-                        socket.send(Message::Text("Prima p1".to_string()));
-                    }
+            if (db.lock().unwrap().get_mut(&game_id).unwrap().p1 == user_id
+                && current_player == Colour::Red)
+                || (db.lock().unwrap().get_mut(&game_id).unwrap().p2 == Some(user_id)
+                    && current_player == Colour::Blue)
+            {
+                if db
+                    .lock()
+                    .unwrap()
+                    .get_mut(&game_id)
+                    .unwrap()
+                    .state
+                    .perform_mov(mov)
+                    .is_err()
+                {
+                    socket.send(Message::Text("Invalid move by player 1.".to_string()));
+                } else {
+                    socket.send(Message::Text("Prima p1".to_string()));
+                }
             }
             if db
                 .lock()
@@ -152,6 +191,7 @@ async fn main() {
         .route("/api/card", get(card))
         .route("/api/create", get(create))
         .route("/api/connect/:game_id", get(connect))
+        .route("/api/submit/:game_id/:mov", get(submit))
         .layer(Extension(store))
         .layer(Extension(db));
 
@@ -164,14 +204,18 @@ async fn main() {
 
 enum HandleError {
     NoGame,
+    NoSecondPlayer,
     InvalidMove,
+    OutOfTurn,
 }
 
 impl IntoResponse for HandleError {
     fn into_response(self) -> axum::response::Response {
         let body = match self {
             HandleError::NoGame => "No game id found.",
-            HandleError::InvalidMove => "Invalid move",
+            HandleError::NoSecondPlayer => "Wait for second player.",
+            HandleError::InvalidMove => "Invalid move.",
+            HandleError::OutOfTurn => "Out of turn.",
         };
         (StatusCode::INTERNAL_SERVER_ERROR, body).into_response()
     }

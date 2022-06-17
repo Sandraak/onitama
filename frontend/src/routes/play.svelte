@@ -6,7 +6,7 @@
     const socket = new WebSocket(`ws://${document.location.host}/api/connect/${$page.url.searchParams.get('game_id')}`);
     socket.onopen = (_: Event) => console.log('connected');
     socket.onmessage = onMessage;
-    socket.onerror = (ev: ErrorEvent) => console.log(`connection error: ${ev.error}`);
+  //  socket.onerror = (socket:WebSocket, ev: Event) => console.log(`connection error: ${ev.error}`);
     socket.onclose = (ev: CloseEvent) => console.log(`lost connection: ${ev.reason}`);
   });
 
