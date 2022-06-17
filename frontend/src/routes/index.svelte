@@ -3,7 +3,7 @@
   import {onMount} from "svelte";
 
   async function getCard(): Promise<Card> {
-    const res = await fetch(`/api/`);
+    const res = await fetch(`/api/card`);
     const json = await res.json();
     if (res.ok) {
       return json;

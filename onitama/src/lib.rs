@@ -1,18 +1,20 @@
-use std::{collections::BTreeMap, ops::Add};
+use std::{collections::BTreeMap};
 
-use card::{Card, Move};
 use rand::prelude::SliceRandom;
 
+use card::{Card, Move};
+
 pub mod card;
+
 pub struct State {
     board: Board,
     current_player: Colour,
-    spare_card: Card,
+    pub spare_card: Card,
     cards: BTreeMap<Colour, [Card; 2]>,
 }
 
 impl State {
-    fn new() -> Self {
+    pub fn new() -> Self {
         let mut deck = Card::deck();
         let mut cards = BTreeMap::new();
         cards.insert(Colour::Blue, [deck.pop().unwrap(), deck.pop().unwrap()]);
@@ -100,6 +102,7 @@ impl Default for Board {
         Board { board }
     }
 }
+
 #[derive(PartialEq, Eq)]
 struct Piece(Rank, Colour);
 
