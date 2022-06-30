@@ -44,9 +44,9 @@ async fn create(user_id: UserIdFromSession, Extension(db): Extension<Database>) 
 async fn submit(
     user_id: UserIdFromSession,
     Extension(db): Extension<Database>,
-    Path(game_id): Path<Uuid>,
-    Path(mov): Path<MovePiece>,
+    Path((game_id, mov)): Path<(Uuid, String)>,
 ) -> Result<String, HandleError> {
+    let mov = serde_json::from_str(&mov).unwrap();
     let user_id = user_id.into();
     let mut guard = db.lock().unwrap();
     let game = guard.get_mut(&game_id).ok_or(HandleError::NoGame)?;

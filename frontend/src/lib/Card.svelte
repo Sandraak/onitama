@@ -3,7 +3,7 @@
   export let moves;
 </script>
 
-<div class="absolute bg-slate-600 p-5 rounded-2xl border-8 border-slate-400 drop-shadow-lg flex flex-row items-center">
+<div class="float-left bg-slate-600 p-5 rounded-2xl border-8 border-slate-400 drop-shadow-lg flex flex-row items-center hover:bg-slate-500">
     <table class="border-4 border-slate-400">
         <tr>
             {#if moves.some(m => m.dx === -2 && m.dy === -2)}
