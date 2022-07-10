@@ -21,7 +21,7 @@ impl State {
         let mut cards = BTreeMap::new();
         cards.insert(Colour::Blue, [deck.pop().unwrap(), deck.pop().unwrap()]);
         cards.insert(Colour::Red, [deck.pop().unwrap(), deck.pop().unwrap()]);
-       // deck.shuffle(&mut rand::thread_rng());
+        // deck.shuffle(&mut rand::thread_rng());
         State {
             board: Board::default(),
             current_player: Colour::Red,

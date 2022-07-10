@@ -23,7 +23,7 @@ use crate::session::{UserId, UserIdFromSession, AXUM_SESSION_COOKIE_NAME};
 
 mod session;
 
-#[derive (Clone, Serialize)]
+#[derive(Clone, Serialize)]
 pub struct Game {
     p1: UserId,
     p2: Option<UserId>,
@@ -56,14 +56,6 @@ async fn submit(
 
     let mut succes_string = "Prima.".to_string();
 
-    if game.p2.is_none() {
-        if user_id == game.p1{
-            return Err(HandleError::NoSecondPlayer);
-        }
-        else{
-            game.p2 = Some(user_id);
-        }
-    }
     let current_player = game.state.current_player();
     if (game.p1 == user_id && current_player == Colour::Red)
         || (game.p2 == Some(user_id) && current_player == Colour::Blue)
@@ -85,11 +77,22 @@ async fn submit(
     Ok(succes_string)
 }
 
-async fn state(Extension(db): Extension<Database>,
-Path(game_id): Path<Uuid>) -> Json<Option<Game>>{
+async fn state(
+    user_id: UserIdFromSession,
+    Extension(db): Extension<Database>,
+    Path(game_id): Path<Uuid>,
+) -> Result<Json<Game>, HandleError> {
     let mut guard = db.lock().unwrap();
-    let game = guard.get_mut(&game_id).cloned();
-    Json(game)
+    let game = guard.get_mut(&game_id).ok_or(HandleError::NoGame)?;
+    let user_id = user_id.into();
+    if game.p2.is_none() {
+        if user_id == game.p1 {
+            return Err(HandleError::NoSecondPlayer);
+        } else {
+            game.p2 = Some(user_id);
+        }
+    }
+    Ok(Json(game.clone()))
 }
 
 async fn connect(
