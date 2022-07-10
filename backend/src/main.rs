@@ -177,21 +177,23 @@ async fn handler(user_id: UserIdFromSession) -> impl IntoResponse {
     )
 }
 
-const HOST: &str = env!("HOST");
-
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt::init();
 
+    let address = std::env::var("HOST").unwrap_or("0.0.0.0".to_owned());
+    let port = std::env::var("PORT").unwrap_or("8000".to_owned());
+    let host = format!("{address}:{port}");
+
     let db: Database = Arc::new(Mutex::new(HashMap::new()));
     let store = MemoryStore::new();
-    let addr = HOST.parse().expect("invalid host");
+    let addr = host.parse().expect(&format!("invalid host: {host}"));
     let app = Router::new()
-        .route("/api", get(handler))
-        .route("/api/card", get(card))
-        .route("/api/create", get(create))
-        .route("/api/connect/:game_id", get(connect))
-        .route("/api/submit/:game_id/:mov", get(submit))
+        .route("/", get(handler))
+        .route("/card", get(card))
+        .route("/create", get(create))
+        .route("/connect/:game_id", get(connect))
+        .route("/submit/:game_id/:mov", get(submit))
         .layer(Extension(store))
         .layer(Extension(db));
 

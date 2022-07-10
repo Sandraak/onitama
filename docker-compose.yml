@@ -5,7 +5,7 @@ services:
     user: "$USER_ID:$GROUP_ID"
     volumes: [".:/app:cached"]
     working_dir: /app/frontend/
-    command: ["yarn", "run", "dev"]
+    command: ["yarn", "run", "dev", "--host"]
     ports: ["3000:3000"]
 
   backend:
@@ -16,7 +16,8 @@ services:
     ports: ["8000:8000"]
     tty: true
     environment:
-      HOST: "0.0.0.0:8000"
+      HOST: "0.0.0.0"
+      PORT: "8000"
       RUST_LOG: "debug"
 
   nginx:
