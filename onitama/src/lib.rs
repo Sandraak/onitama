@@ -3,10 +3,11 @@ use std::collections::BTreeMap;
 use rand::prelude::SliceRandom;
 
 use card::{Card, Move};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 pub mod card;
 
+#[derive(Clone, Serialize)]
 pub struct State {
     board: Board,
     current_player: Colour,
@@ -95,6 +96,7 @@ impl State {
     }
 }
 
+#[derive(Clone, Serialize)]
 struct Board {
     board: [[Option<Piece>; 5]; 5],
 }
@@ -119,7 +121,7 @@ impl Default for Board {
     }
 }
 
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Clone, Serialize)]
 struct Piece(Rank, Colour);
 
 impl Piece {
@@ -129,25 +131,25 @@ impl Piece {
     const BLUEMASTER: Piece = Piece(Rank::Master, Colour::Blue);
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 pub struct MovePiece {
     from: Position,
     mov: Move,
     card: usize, //index van de kaarten van de spelen
 }
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 struct Position {
     x: usize,
     y: usize,
 }
 
-#[derive(Eq, PartialEq)]
+#[derive(Eq, PartialEq, Clone, Serialize)]
 enum Rank {
     Pawn,
     Master,
 }
 
-#[derive(Ord, PartialOrd, PartialEq, Eq, Copy, Clone)]
+#[derive(Ord, PartialOrd, PartialEq, Eq, Copy, Clone, Serialize)]
 pub enum Colour {
     Red,
     Blue,

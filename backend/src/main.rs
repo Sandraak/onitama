@@ -12,6 +12,7 @@ use axum::{
     routing::get,
     Json, Router, Server,
 };
+use serde::{Deserialize, Serialize};
 use tracing::debug;
 use uuid::Uuid;
 
@@ -21,6 +22,8 @@ use onitama::{Colour, MovePiece, State as GameState};
 use crate::session::{UserId, UserIdFromSession, AXUM_SESSION_COOKIE_NAME};
 
 mod session;
+
+#[derive (Clone, Serialize)]
 pub struct Game {
     p1: UserId,
     p2: Option<UserId>,
@@ -54,7 +57,12 @@ async fn submit(
     let mut succes_string = "Prima.".to_string();
 
     if game.p2.is_none() {
-        return Err(HandleError::NoSecondPlayer);
+        if user_id == game.p1{
+            return Err(HandleError::NoSecondPlayer);
+        }
+        else{
+            game.p2 = Some(user_id);
+        }
     }
     let current_player = game.state.current_player();
     if (game.p1 == user_id && current_player == Colour::Red)
@@ -75,6 +83,13 @@ async fn submit(
         }
     }
     Ok(succes_string)
+}
+
+async fn state(Extension(db): Extension<Database>,
+Path(game_id): Path<Uuid>) -> Json<Option<Game>>{
+    let mut guard = db.lock().unwrap();
+    let game = guard.get_mut(&game_id).cloned();
+    Json(game)
 }
 
 async fn connect(
@@ -194,6 +209,7 @@ async fn main() {
         .route("/create", get(create))
         .route("/connect/:game_id", get(connect))
         .route("/submit/:game_id/:mov", get(submit))
+        .route("/state/:game_id", get(state))
         .layer(Extension(store))
         .layer(Extension(db));
 
