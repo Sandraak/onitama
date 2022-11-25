@@ -16,8 +16,8 @@ use serde::{Deserialize, Serialize};
 use tracing::debug;
 use uuid::Uuid;
 
-use onitama::card::{Card, Move};
-use onitama::{Colour, MovePiece, State as GameState};
+use onitama::card::{Card, Shift};
+use onitama::{Action, State as GameState, Team};
 
 use crate::session::{UserId, UserIdFromSession, AXUM_SESSION_COOKIE_NAME};
 
@@ -57,8 +57,8 @@ async fn submit(
     let mut succes_string = "Prima.".to_string();
 
     let current_player = game.state.current_player();
-    if (game.p1 == user_id && current_player == Colour::Red)
-        || (game.p2 == Some(user_id) && current_player == Colour::Blue)
+    if (game.p1 == user_id && current_player == Team::Red)
+        || (game.p2 == Some(user_id) && current_player == Team::Blue)
     {
         if game.state.perform_mov(mov).is_err() {
             return Err(HandleError::InvalidMove);
@@ -68,7 +68,7 @@ async fn submit(
     }
 
     if game.state.winner().is_some() {
-        if game.state.winner().unwrap() == Colour::Red {
+        if game.state.winner().unwrap() == Team::Red {
             succes_string = "Red won".to_string();
         } else {
             succes_string = "Blue won".to_string();
@@ -113,7 +113,7 @@ async fn connect(
 
         while let Some(Ok(message)) = socket.recv().await {
             // Wat als dit geen move is?
-            let mov: MovePiece = serde_json::from_str(&message.into_text().unwrap()).unwrap();
+            let mov: Action = serde_json::from_str(&message.into_text().unwrap()).unwrap();
             //   let game = db.lock().unwrap().get_mut(&game_id).unwrap();
             let current_player = db
                 .lock()
@@ -123,9 +123,9 @@ async fn connect(
                 .state
                 .current_player();
             if (db.lock().unwrap().get_mut(&game_id).unwrap().p1 == user_id
-                && current_player == Colour::Red)
+                && current_player == Team::Red)
                 || (db.lock().unwrap().get_mut(&game_id).unwrap().p2 == Some(user_id)
-                    && current_player == Colour::Blue)
+                    && current_player == Team::Blue)
             {
                 if db
                     .lock()
@@ -158,7 +158,7 @@ async fn connect(
                     .state
                     .winner()
                     .unwrap()
-                    == Colour::Red
+                    == Team::Red
                 {
                     socket.send(Message::Text("Red won".to_string()));
                 } else {

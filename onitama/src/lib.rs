@@ -1,161 +1,102 @@
 use std::collections::BTreeMap;
+use std::mem;
 
-use rand::prelude::SliceRandom;
-
-use card::{Card, Move};
+use rand::seq::SliceRandom;
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-pub mod card;
+pub use crate::board::Board;
+pub use crate::card::Card;
+pub use crate::error::{Error, Result};
+pub use crate::piece::{Piece, Rank, Team};
+pub use crate::pos::{Position, Shift};
 
-#[derive(Clone, Serialize)]
-pub struct State {
+mod board;
+mod card;
+mod error;
+mod piece;
+mod pos;
+
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
+pub struct Onitama {
     board: Board,
-    current_player: Colour,
-    pub spare_card: Card,
-    cards: BTreeMap<Colour, [Card; 2]>,
+    current_player: Team,
+    cards: BTreeMap<Team, [Card; 2]>,
+    spare_card: Card,
 }
 
-impl State {
+impl Onitama {
     pub fn new() -> Self {
-        let mut deck = Card::deck();
+        let board = Board::default();
+
+        let current_player = Team::default();
+
+        let mut deck = Card::DECK.to_vec();
+        deck.shuffle(&mut rand::thread_rng());
+
         let mut cards = BTreeMap::new();
-        cards.insert(Colour::Blue, [deck.pop().unwrap(), deck.pop().unwrap()]);
-        cards.insert(Colour::Red, [deck.pop().unwrap(), deck.pop().unwrap()]);
-        // deck.shuffle(&mut rand::thread_rng());
-        State {
-            board: Board::default(),
-            current_player: Colour::Red,
-            spare_card: deck.pop().unwrap(),
+        cards.insert(Team::Red, [deck.pop().unwrap(), deck.pop().unwrap()]);
+        cards.insert(Team::Blue, [deck.pop().unwrap(), deck.pop().unwrap()]);
+
+        let spare_card = deck.pop().unwrap();
+
+        Onitama {
+            board,
+            current_player,
             cards,
+            spare_card,
         }
     }
 
-    pub fn perform_mov(&mut self, mov: MovePiece) -> Result<(), MoveError> {
-        if !self
-            .cards
-            .get(&self.current_player)
-            .unwrap()
-            .iter()
-            .any(|card| card.moves.contains(&mov.mov))
-        {
-            return Err(MoveError::InvalidMove);
+    pub fn perform(&mut self, action: Action) -> Result<()> {
+        match self.board.get(action.pos)? {
+            None => return Err(Error::Empty),
+            Some(piece) => {
+                if piece.team != self.current_player {
+                    return Err(Error::InvalidTeam);
+                }
+            }
         }
-        let piece = self.board.board[mov.from.x][mov.from.y]
-            .take()
-            .ok_or(MoveError::NoPiece)?;
-        let to: Position = Position {
-            x: (mov.from.x as i8 + mov.mov.dx) as usize,
-            y: (mov.from.y as i8 + mov.mov.dy) as usize,
-        };
-        // TODO: check if new pos is on the board and not occupied by pawn of own colour
-        self.board.board[to.x][to.y] = Some(piece);
-        std::mem::swap(
-            &mut self.cards.get_mut(&self.current_player).unwrap()[mov.card],
+
+        if !self.cards[&self.current_player][action.card_index]
+            .shifts
+            .contains(&action.shift)
+        {
+            return Err(Error::InvalidMove);
+        }
+
+        self.board.perform_raw(action)?;
+
+        mem::swap(
+            &mut self.cards.get_mut(&self.current_player).unwrap()[action.card_index],
             &mut self.spare_card,
         );
-        // TODO: Maak minder lelijk
-        if self.current_player == Colour::Blue {
-            self.current_player = Colour::Red;
-        } else {
-            self.current_player = Colour::Blue;
-        }
+
+        self.current_player = !self.current_player;
+
         Ok(())
     }
 
-    pub fn current_player(&self) -> Colour {
+    pub fn current_player(&self) -> Team {
         self.current_player
     }
 
-    pub fn winner(&self) -> Option<Colour> {
-        if !self
-            .board
-            .board
-            .iter()
-            .flatten()
-            .flatten()
-            .any(|piece| *piece == Piece::REDMASTER)
-        {
-            return Some(Colour::Blue);
-        } else if !self
-            .board
-            .board
-            .iter()
-            .flatten()
-            .flatten()
-            .any(|piece| *piece == Piece::BLUEMASTER)
-        {
-            return Some(Colour::Red);
-        }
-
-        if self.board.board[0][2] == Some(Piece::REDMASTER) {
-            return Some(Colour::Red);
-        } else if self.board.board[4][2] == Some(Piece::BLUEMASTER) {
-            return Some(Colour::Blue);
-        }
-        None
+    pub fn winner(&self) -> Option<Team> {
+        self.board.winner()
     }
 }
 
-#[derive(Clone, Serialize)]
-struct Board {
-    board: [[Option<Piece>; 5]; 5],
-}
-
-impl Board {}
-
-impl Default for Board {
+impl Default for Onitama {
     fn default() -> Self {
-        let mut board: [[Option<Piece>; 5]; 5] = Default::default();
-        board[0][0] = Some(Piece::BLUEPAWN);
-        board[0][1] = Some(Piece::BLUEPAWN);
-        board[0][2] = Some(Piece::BLUEMASTER);
-        board[0][3] = Some(Piece::BLUEPAWN);
-        board[0][4] = Some(Piece::BLUEPAWN);
-
-        board[4][0] = Some(Piece::REDPAWN);
-        board[4][1] = Some(Piece::REDPAWN);
-        board[4][2] = Some(Piece::REDMASTER);
-        board[4][3] = Some(Piece::REDPAWN);
-        board[4][4] = Some(Piece::REDPAWN);
-        Board { board }
+        Onitama::new()
     }
 }
 
-#[derive(PartialEq, Eq, Clone, Serialize)]
-struct Piece(Rank, Colour);
-
-impl Piece {
-    const REDPAWN: Piece = Piece(Rank::Pawn, Colour::Red);
-    const REDMASTER: Piece = Piece(Rank::Master, Colour::Red);
-    const BLUEPAWN: Piece = Piece(Rank::Pawn, Colour::Blue);
-    const BLUEMASTER: Piece = Piece(Rank::Master, Colour::Blue);
-}
-
-#[derive(Deserialize, Serialize)]
-pub struct MovePiece {
-    from: Position,
-    mov: Move,
-    card: usize, //index van de kaarten van de spelen
-}
-#[derive(Deserialize, Serialize)]
-struct Position {
-    x: usize,
-    y: usize,
-}
-
-#[derive(Eq, PartialEq, Clone, Serialize)]
-enum Rank {
-    Pawn,
-    Master,
-}
-
-#[derive(Ord, PartialOrd, PartialEq, Eq, Copy, Clone, Serialize)]
-pub enum Colour {
-    Red,
-    Blue,
-}
-
-pub enum MoveError {
-    NoPiece,
-    InvalidMove,
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
+pub struct Action {
+    pub(crate) pos: Position,
+    pub(crate) shift: Shift,
+    pub(crate) card_index: usize,
 }
