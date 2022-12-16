@@ -1,28 +1,35 @@
 version: '3.9'
 services:
   frontend:
-    image: node:18.3
+    image: node:19.3
     user: "$USER_ID:$GROUP_ID"
-    volumes: [".:/app:cached"]
-    working_dir: /app/frontend/
-    command: ["yarn", "run", "dev", "--host"]
-    ports: ["3000:3000"]
+    volumes:
+      - "./frontend:/app"
+    working_dir: /app
+    command: [ "yarn", "run", "dev", "--host" ]
+    ports: [ "127.0.0.1:3000:3000" ]
 
   backend:
-    image: rust:1.61
-    volumes: [".:/app:cached"]
-    working_dir: /app/backend/
-    command: ["cargo", "run"]
-    ports: ["8000:8000"]
-    tty: true
+    image: rust:1.66
+    depends_on: [ redis ]
+    volumes:
+      - ".:/app"
+    working_dir: /app
+    command: [ "cargo", "run", "--bin", "backend" ]
     environment:
       HOST: "0.0.0.0"
       PORT: "8000"
-      RUST_LOG: "debug"
+      REDIS_URL: "redis://redis/"
+      RUST_LOG: "backend=trace,warn"
+    ports: [ "127.0.0.1:8000:8000" ]
+
+  redis:
+    image: redis:7.0
+    ports: [ "127.0.0.1:6379:6379" ]
 
   nginx:
-    image: nginx:1.16
-    depends_on: [frontend, backend]
+    image: nginx:1.23
+    depends_on: [ frontend, backend ]
     volumes:
-      - "./docker/nginx.conf:/etc/nginx/nginx.conf:ro"
-    ports: ["80:80"]
+      - "./nginx.conf:/etc/nginx/nginx.conf"
+    ports: [ "127.0.0.1:80:80" ]

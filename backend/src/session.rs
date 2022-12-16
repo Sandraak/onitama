@@ -1,110 +1,68 @@
-use async_session::{MemoryStore, Session, SessionStore as _};
-use axum::async_trait;
-use axum::extract::{FromRequest, RequestParts};
-use axum::headers::{Cookie, HeaderValue};
-use axum::http::StatusCode;
-use axum::{Extension, TypedHeader};
+use axum::extract::{FromRef, FromRequestParts, Path};
+use axum::http::request::Parts;
+use axum_extra::extract::cookie::{Cookie, Key};
+use axum_extra::extract::SignedCookieJar;
 use serde::{Deserialize, Serialize};
-use tracing::debug;
 use uuid::Uuid;
 
-pub const AXUM_SESSION_COOKIE_NAME: &str = "axum_session";
+use crate::error::Error;
 
-pub struct FreshUserId {
-    pub user_id: UserId,
-    pub cookie: HeaderValue,
+const SESSION_COOKIE: &str = "session";
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Session {
+    id: UserId,
+    name: String,
 }
 
-pub enum UserIdFromSession {
-    FoundUserId(UserId),
-    CreatedFreshUserId(FreshUserId),
-}
-
-#[async_trait]
-impl<B> FromRequest<B> for UserIdFromSession
-where
-    B: Send,
-{
-    type Rejection = (StatusCode, &'static str);
-
-    async fn from_request(req: &mut RequestParts<B>) -> Result<Self, Self::Rejection> {
-        let Extension(store) = Extension::<MemoryStore>::from_request(req)
-            .await
-            .expect("`MemoryStore` extension missing");
-
-        let cookie = Option::<TypedHeader<Cookie>>::from_request(req)
-            .await
-            .unwrap();
-
-        let session_cookie = cookie
-            .as_ref()
-            .and_then(|cookie| cookie.get(AXUM_SESSION_COOKIE_NAME));
-
-        // return the new created session cookie for client
-        if session_cookie.is_none() {
-            let user_id = UserId::new();
-            let mut session = Session::new();
-            session.insert("user_id", user_id).unwrap();
-            let cookie = store.store_session(session).await.unwrap().unwrap();
-            return Ok(Self::CreatedFreshUserId(FreshUserId {
-                user_id,
-                cookie: HeaderValue::from_str(
-                    format!("{}={}", AXUM_SESSION_COOKIE_NAME, cookie).as_str(),
-                )
-                .unwrap(),
-            }));
-        }
-
-        debug!(
-            "UserIdFromSession: got session cookie from user agent, {}={}",
-            AXUM_SESSION_COOKIE_NAME,
-            session_cookie.unwrap()
-        );
-        // continue to decode the session cookie
-        let user_id = if let Some(session) = store
-            .load_session(session_cookie.unwrap().to_owned())
-            .await
-            .unwrap()
-        {
-            if let Some(user_id) = session.get::<UserId>("user_id") {
-                debug!(
-                    "UserIdFromSession: session decoded success, user_id={:?}",
-                    user_id
-                );
-                user_id
-            } else {
-                return Err((
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    "No `user_id` found in session",
-                ));
-            }
-        } else {
-            debug!(
-                "UserIdFromSession: err session not exists in store, {}={}",
-                AXUM_SESSION_COOKIE_NAME,
-                session_cookie.unwrap()
-            );
-            return Err((StatusCode::BAD_REQUEST, "No session found for cookie"));
-        };
-
-        Ok(Self::FoundUserId(user_id))
-    }
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(transparent)]
 pub struct UserId(Uuid);
 
-impl UserId {
-    pub fn new() -> Self {
-        Self(Uuid::new_v4())
+impl Session {
+    pub fn new(name: String) -> Self {
+        Session {
+            name,
+            id: UserId(Uuid::new_v4()),
+        }
+    }
+
+    pub fn id(&self) -> UserId {
+        self.id
+    }
+
+    pub fn name(&self) -> &str {
+        &self.name
     }
 }
 
-impl From<UserIdFromSession> for UserId {
-    fn from(id: UserIdFromSession) -> Self {
-        match id {
-            UserIdFromSession::FoundUserId(id) => id,
-            UserIdFromSession::CreatedFreshUserId(created) => created.user_id,
+#[async_trait::async_trait]
+impl<S> FromRequestParts<S> for Session
+where
+    S: Send + Sync,
+    Key: FromRef<S>,
+{
+    type Rejection = Error;
+
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        let jar: SignedCookieJar<Key> = SignedCookieJar::from_request_parts(parts, state)
+            .await
+            .unwrap();
+        match jar.get(SESSION_COOKIE) {
+            None => Err(Error::Session),
+            Some(cookie) => serde_json::from_str(cookie.value()).map_err(|_| Error::Session),
         }
     }
+}
+
+pub async fn create_session(
+    Path(name): Path<String>,
+    jar: SignedCookieJar,
+) -> Result<SignedCookieJar, Error> {
+    let session = Session::new(name);
+    let cookie = Cookie::build(SESSION_COOKIE, serde_json::to_string(&session)?)
+        .path("/")
+        .finish();
+
+    Ok(jar.add(cookie))
 }
