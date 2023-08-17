@@ -29,18 +29,18 @@ impl GameStore {
 
     pub async fn update(&mut self, id: GameId, game: &Game) -> Result<(), Error> {
         self.connection
-            .set(id.0.as_bytes(), game)
+            .set(id.0.as_bytes(), serde_json::to_string(game)?)
             .await
             .map_err(|_| Error::Store)
     }
 
     pub async fn get(&mut self, id: GameId) -> Result<Game, Error> {
-        // self.connection
-        //     .get(id.0.as_bytes())
-        //     .await
-        //     .and_then(serde_json::from_str)
-        //     .map_err(|_| Error::DoesNotExist)
-        todo!()
+        self.connection
+            .get::<_, String>(id.0.as_bytes())
+            .await
+            .ok()
+            .and_then(|x| serde_json::from_str(&x).ok())
+            .ok_or(Error::DoesNotExist)
     }
 }
 

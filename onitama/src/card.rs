@@ -1,13 +1,30 @@
 #[cfg(feature = "serde")]
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::pos::Shift;
 
-#[cfg_attr(feature = "serde", derive(Serialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", serde(try_from = "BorrowedCard"))]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct Card {
     name: &'static str,
     pub(crate) shifts: &'static [Shift],
+}
+
+impl TryFrom<BorrowedCard> for Card {
+    type Error = &'static str;
+
+    fn try_from(value: BorrowedCard) -> Result<Self, Self::Error> {
+        Card::DECK
+            .into_iter()
+            .find(|card| card.name == value.name)
+            .ok_or(":(")
+    }
+}
+
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+struct BorrowedCard {
+    name: String,
 }
 
 impl Card {
